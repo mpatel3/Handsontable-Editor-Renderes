@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>MangoApps - Desktop</title>
+    <script src="node_modules/handsontable/dist/handsontable.full.min.js"></script>
+    <link href="node_modules/handsontable/dist/handsontable.full.min.css" rel="stylesheet" media="screen">
+    <style>
+    body {
+            padding: 0;
+            margin: 0;
+            background: #fff;
+            font: 0.9em Helvetica;
+            }
+
+            #example1 {
+            border-bottom: 2px solid #C51162;
+            background: #eee;
+            }
+
+            .pages {
+            margin-top: 15px;
+            float: right;
+            }
+
+            .myBt {
+            background: #fff;
+            color: #333;
+            width: 30px;
+            font: 1em Helvetica;
+            font-weight: bold; //border: 2px solid #B2EBF2;
+            border: 0;
+            border-radius: 50%;
+            margin: 1px;
+            padding: 5px;
+            text-align: center;
+            }
+
+            .myBt:focus {
+            background: #C51162;
+            color: #fff;
+            border: 0;
+            outline: 0;
+            }
+    </style>
+  </head>
+  <body>
+    <div id="example1"></div>
+    <div class="pages"></div>
+    <script>
+    document.addEventListener("DOMContentLoaded", function() {
+
+      var
+        container = document.getElementById('example1'),
+        hot;
+      var data = [
+        ['Accra', 'Ghana', 26, true],
+        ['Addis Ababa', 'Ethiopia', 19, false],
+        ['Adelaide', 'Australia', 19, true],
+        ['Algiers', 'Algeria', 16, true],
+        ['Almaty', 'Kazakhstan', -8, false],
+        ['Amman', 'Jordan', 17, false],
+        ['Amsterdam', 'Netherlands', 5, false],
+        ['Anadyr', 'Russia', -16, false],
+        ['Anchorage', 'United States', -7, true],
+        ['Ankara', 'Turkey', 13, false],
+        ['Asuncion', 'Paraguay', 25, true],
+        ['Athens', 'Greece', 16, false],
+        ['Atlanta', 'United States', 9, true],
+        ['Auckland', 'New Zeland', 14, true],
+        ['Bangkok', 'Thailand', 28, true],
+        ['Barcelona', 'Spain', 15, false],
+        ['Beijing', 'China', 1, false],
+        ['Beirut', 'Lebanon', 22, false],
+        ['Belgrade', 'Serbia', 4, false],
+        ['Bengaluru', 'India', 28, false],
+        ['Berlin', 'Germany', 3, true],
+        ['Bogota', 'Colombia', 13, false],
+        ['Boston', 'United States', 2, true],
+        ['Brasilia', 'Brazil', 20, false],
+        ['Brisbane', 'Australia', 23, false],
+        ['Brussels', 'Brussels', 4, false],
+        ['Bucharest', 'Romania', 5, true],
+        ['Budapest', 'Hungary', 4, false],
+        ['Buenos Aires', 'Argentina', 21, false],
+        ['Cairo', 'Egypt', 23, false],
+        ['Calgary', 'Canada', -2, true],
+        ['Canberra', 'Australia', 12, true],
+        ['Cape Town', 'Republic of South Africa', 25, false],
+        ['Caracas', 'Venezuela', 29, false],
+        ['Casablanca', 'Maroko', 20, false],
+        ['Chicago', 'United States', 7, true],
+        ['Copenhagen', 'Denmark', 2, true],
+        ['Dallas', 'United States', 21, true],
+        ['Dar es Salaam', 'Tanzania', 32, true],
+        ['Darwin', 'Australia', 27, false],
+        ['Denver', 'United States', 1, false],
+        ['Detroit', 'United States', 6, true],
+        ['Dhaka', 'Bangladesh', 23, false],
+        ['Doha', 'Qatar', 25, true],
+        ['Dubai', 'United Arab Emirates', 27, true],
+        ['Dublin', 'Ireland', 7, false],
+        ['Edmonton', 'Canada', -5, true],
+        ['Frankfurt', 'Germany', 4, false],
+        ['Guatemala City', 'Republic of Guatemala', 14, true],
+        ['Halifax', 'Canada', 0, true],
+        ['Hanoi', 'Vietnam', 18, false],
+        ['Harare', 'Zimbabwe', 17, false],
+        ['Havana', 'Cuba', 15, false],
+        ['Helsinki', 'Finland', -2, true],
+        ['Hong Kong', 'Hong Kong', 20, true],
+        ['Honolulu', 'United States', 23, true],
+        ['Houston', 'United States', 23, false],
+        ['Indianapolis', 'United States', 9, false],
+        ['Islamabad', 'Pakistan', 23, false],
+        ['Istanbul', 'Turkey', 13, false],
+        ['Jakarta', 'Republic of Indonesia', 29, true],
+        ['Jerusalem', 'Israel', 25, false],
+        ['Johannesburg', 'Republic of South Africa', 27, true],
+        ['Karachi', 'Pakistan', 29, false],
+        ['Kathmandu', 'Nepal', 15, false],
+        ['Khartoum', 'Sudan', 34, false],
+        ['Kingston', 'Australia', 24, false],
+        ['Kinshasa', 'Democratic Republic of the Congo', 31, true],
+        ['Kiritimati', 'Kiribati', 26, false],
+        ['Kolkata', 'India', 25, false],
+        ['Kuala Lumpur', 'Malaysia', 28, false],
+        ['Kuwait City', 'Kuwait', 22, false],
+        ['Kyiv', 'Ukraine', 1, false],
+        ['La Paz', 'Bolivia', 9, false],
+        ['Lagos', 'Nigeria', 34, false],
+        ['Lahore', 'Pakistan', 25, false],
+        ['Las Vegas', 'United States', 8, false],
+        ['Lima', 'Peru', 19, false],
+        ['Lisbon', 'Portugal', 16, false],
+        ['London', 'England', 8, false],
+        ['Los Angeles', 'United States', 9, false],
+        ['Madrid', 'Spain', 13, false],
+        ['Managua', 'Nicaragua', 23, false],
+        ['Manila', 'Philippines', 28],
+        ['Melbourne', 'Australia', 12],
+        ['Mexico City', 'Mexico', 9],
+        ['Miami', 'United States', 22],
+        ['Minneapolis', 'United States', 11],
+        ['Minsk', 'Belarus', -2],
+        ['Montevideo', 'Uruguay', 20],
+        ['Montreal', 'Canada', -1],
+        ['Moscow', 'Russia', 1],
+        ['Mumbai', 'India', 30],
+        ['Nairobi', 'Kenya', 24],
+        ['Nassau', 'Bahamas', 23],
+        ['New Delhi', 'India', 24],
+        ['New Orleans', 'United States', 18],
+        ['New York', 'United States', 4],
+        ['Oslo', 'Norway', 2],
+        ['Ottawa', 'Canada', -1],
+        ['Paris', 'France', 6],
+        ['Perth', 'Australia', 19],
+        ['Philadelphia', 'United States', 2],
+        ['Phoenix', 'United States', 9],
+        ['Prague', 'Czech', 1],
+        ['Reykjavik', 'Island', 3],
+        ['Rio de Janeiro', 'Brazil', 30],
+        ['Riyadh', 'Saudi Arabia', 16],
+        ['Rome', 'Italy', 13],
+        ['Salt Lake City', 'United States', 1],
+        ['San Francisco', 'United States', 11],
+        ['San Juan', 'Philippines', 22],
+        ['San Salvador', 'El Salvador', 19],
+        ['Santiago', 'Philippines', 19],
+        ['Santo Domingo', 'Dominican Republic', 21],
+        ['São Paulo', 'Brazil', 27],
+        ['Seattle', 'United States', 4],
+        ['Seoul', 'South Korea', 0],
+        ['Shanghai', 'China', 9],
+        ['Singapore', 'Singapore', 29],
+        ['Sofia', 'Bulgaria', 5],
+        ['Stockholm', 'Sweden', 0],
+        ['Suva', 'Fiji', 24],
+        ['Sydney', 'Australia', 22],
+        ['Taipei', 'Taiwan', 20],
+        ['Tallinn', 'Estonia', -1],
+        ['Tashkent', 'Uzbekistan', 1],
+        ['Tegucigalpa', 'Honduras', 17],
+        ['Tehran', 'Iran', 10],
+        ['Tokyo', 'Japan', 10],
+        ['Toronto', 'Canada', 4],
+        ['Vancouver', 'Canada', 4],
+        ['Vienna', 'Austria', 3],
+        ['Warsaw', 'Poland', -1],
+        ['Washington DC', 'United States', 3],
+        ['Winnipeg', 'Canada', 1],
+        ['Yangon', 'Myanmar', 28],
+        ['Zagreb', 'Republic of Croatia', 6],
+        ['Zürich', 'Switzerland', 2]
+      ];
+      hot = new Handsontable(container, {
+        //data: Handsontable.helper.createSpreadsheetData(137, 5),
+        //colHeaders: true,
+        data: data,
+        colHeaders: ['City', 'Country', 'Temperature'],
+        stretchH: 'all',
+        dropdownMenu: true,
+        columnSorting: true,
+        sortIndicator: true,
+        filters: true,
+        columns: [{
+
+        }, {}, {
+          type: 'numeric'
+        }, {
+          type: 'checkbox'
+        }],
+        height: 270
+      });
+
+      var rowsOnSinglePage = 15; //can be changed
+      var pages = document.querySelector('.pages');
+
+      var newDataSet = hot.getData();
+
+      hot.updateSettings({
+        afterColumnSort: function() {
+          refreshPaging()
+        },
+        afterFilter: function() {
+          refreshPaging()
+        }
+      });
+
+      function refreshPaging() {
+        newDataSet = hot.getData();
+        pages.innerHTML = '';
+        createPages(rowsOnSinglePage);
+        hot.updateSettings({
+          hiddenRows: {
+            rows: getArray(1),
+            indicators: false
+          }
+        });
+        pages.firstElementChild.focus()
+      }
+
+      function createPages(rowsOnSinglePage) {
+        var bt, els = Math.ceil(newDataSet.length / rowsOnSinglePage);
+
+        for (var i = 0; i < els; i++) {
+          bt = document.createElement('BUTTON');
+          bt.className = 'myBt';
+          bt.innerHTML = i + 1;
+          pages.appendChild(bt);
+        }
+      };
+
+      createPages(rowsOnSinglePage); //we define how many rows should be on a single page
+
+      pages.addEventListener('click', function(e) {
+        var clicked = e.target.innerHTML;
+        if (e.taget !== pages) {
+          hot.updateSettings({
+            hiddenRows: {
+              rows: getArray(clicked),
+              indicators: false
+            }
+          })
+        }
+      });
+
+      function getArray(clicked) {
+        var parts = pages.childElementCount;
+        var arr = [];
+
+        if (clicked === 1) {
+          for (var i = (clicked * rowsOnSinglePage); i < newDataSet.length; i++) {
+            arr.push(i);
+          }
+          return arr;
+        } else {
+          for (var j = 0; j < (clicked * rowsOnSinglePage) - rowsOnSinglePage; j++) {
+            arr.push(j);
+          }
+          for (var i = (clicked * rowsOnSinglePage); i < newDataSet.length; i++) {
+            arr.push(i);
+          }
+          return arr;
+        }
+      }
+
+      hot.updateSettings({
+        hiddenRows: {
+          rows: getArray(1),
+          indicators: false
+        }
+      });
+
+    });
+    </script>
+  </body>
+</html>
