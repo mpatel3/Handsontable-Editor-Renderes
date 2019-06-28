@@ -1,3 +1,5 @@
+import commonUtility from '../commonUtility/commonUtility';
+
 /* eslint prefer-rest-params: 0 */
 /* eslint no-param-reassign: 0 */
 /**
@@ -22,11 +24,11 @@ const CustomCheckBoxEditor = () => {
         Object.keys(options).forEach((key) => {
             if (Object.prototype.hasOwnProperty.call(options, key)) {
                 const uniqId = `${key}_${(new Date()).getTime()}`,
-                    isOptionChecked = currValue.includes(options[key]);
-                templateString += `<li><input type='checkbox' value='${options[key]}' ${isOptionChecked ? 'checked' : ''} id='${uniqId}' /><label htmlFor=${uniqId}>${options[key]}</label></li>`;
+                    isOptionChecked = currValue.indexOf(options[key]) > -1;
+                templateString += `<li class='bottom-5'><input type='checkbox' class='filled-in' value='${options[key]}' ${isOptionChecked ? 'checked' : ''} id='${uniqId}' /><label class='fixwidth text-truncation left-p-30' for='${uniqId}'>${options[key]}</label></li>`;
             }
         });
-        templateString += '<li data-name="addNew" style="cursor: pointer;">Add New Option</li>';
+        templateString += `<li data-name='addNew' class='wrap-add-new theme_color'><i class="fal fa-plus"></i> Add New Option</li>`;
         return templateString;
     },
     /**
@@ -35,13 +37,16 @@ const CustomCheckBoxEditor = () => {
      */
     initFunc = function () {
         // create a node.
+        const elem = document.getElementById('customCheckBoxEditor');
+        if (elem) elem.remove();
         this.ulListElm = this.instance.rootDocument.createElement('UL');
-        this.ulListElm.setAttribute('id', `customCheckBoxEditor_${new Date().getTime()}`);
+        this.ulListElm.setAttribute('id', 'customCheckBoxEditor');
+        Handsontable.dom.addClass(this.ulListElm,'clikBoxWrapper');
         this.ulListElmStyle = this.ulListElm.style;
         this.ulListElmStyle.position = 'absolute';
         this.ulListElmStyle.top = 0;
         this.ulListElmStyle.left = 0;
-        this.ulListElmStyle.zIndex = 9999;
+        this.ulListElmStyle.zIndex = 9999; 
         this.ulListElm.style.display = 'none';
         // Attach node to DOM, by appending it to the container holding the table
         this.instance.rootDocument.body.appendChild(this.ulListElm);
@@ -58,7 +63,7 @@ const CustomCheckBoxEditor = () => {
             latestValues = value[0][0].length ? value[0][0].split(',') : [];
         if (latestValues.length) {
             Object.keys(latestValues).forEach((key) => {
-                if (!self.cellPropertiesBackup.includes(latestValues[key])) {
+                if (self.cellPropertiesBackup.indexOf(latestValues[key]) < 0) {
                     self.cellProperties.checkBoxOptions.push(latestValues[key]);
                 }
             });
@@ -94,7 +99,7 @@ const CustomCheckBoxEditor = () => {
                 const inputElem = document.createElement('INPUT'),
                     spanElem = document.createElement('SPAN');
                 inputElem.type = 'text';
-                spanElem.innerText = 'x';
+                spanElem.innerHTML = `<i data-spanid='cross-button' class='fal fa-times'></i>`;
                 spanElem.setAttribute('data-spanid', 'cross-button');
                 Handsontable.dom.empty(e.target);
                 e.target.appendChild(inputElem);
@@ -110,7 +115,12 @@ const CustomCheckBoxEditor = () => {
                 });
             }
             if (e.target.dataset.spanid === 'cross-button') {
-                if (e.target.parentElement) e.target.parentElement.innerText = 'Add New Option';
+                if (e.target.tagName === 'I' && e.target.parentElement && e.target.parentElement.parentElement) {
+                    e.target.parentElement.parentElement.innerText = 'Add New Option';
+                }
+                if(e.target.tagName === 'SPAN' && e.target.parentElement) {
+                    e.target.parentElement.innerText = 'Add New Option';
+                }
             }
         });
     },
@@ -151,15 +161,24 @@ const CustomCheckBoxEditor = () => {
      * @param - none.
      */
     openFunc = function () {
-        const [width, offset] = [Handsontable.dom.outerWidth(this.TD), this.TD.getBoundingClientRect()];
-        this.ulListElmStyle.top = `${this.instance.rootWindow.pageYOffset + offset.top + Handsontable.dom.outerHeight(this.TD)}px`;
-        this.ulListElmStyle.left = `${this.instance.rootWindow.pageXOffset + offset.left}px`;
+        const width = Handsontable.dom.outerWidth(this.TD),
+            editorHeight = this.ulListElm.getHeight(),
+            offset = this.TD.getBoundingClientRect(),
+            cellInstnaceHeight = Handsontable.dom.outerHeight(this.TD),
+            flipNeeded = commonUtility.isFlipNeeded(this.TD, this.instance.view.wt.wtTable.TABLE, this.instance.view.wt.wtTable.THEAD, editorHeight);
         // sets select dimensions to match cell size
         this.ulListElmStyle.height = 'auto';
         this.ulListElmStyle.minWidth = `${width}px`;
+        this.ulListElmStyle.margin = '0px';
         this.ulListElmStyle.padding = '5px';
         this.ulListElmStyle.backgroundColor = '#fff';
-        // display the list
+        if (flipNeeded) {
+            this.ulListElmStyle.top = `${this.instance.rootWindow.pageYOffset + offset.top - editorHeight - 5}px`;
+            this.ulListElmStyle.left = `${this.instance.rootWindow.pageXOffset + offset.left}px`;
+        } else {
+            this.ulListElmStyle.top = `${this.instance.rootWindow.pageYOffset + offset.top + cellInstnaceHeight}px`;
+            this.ulListElmStyle.left = `${this.instance.rootWindow.pageXOffset + offset.left}px`;
+        }
         this.ulListElm.style.display = '';
     },
     /**
