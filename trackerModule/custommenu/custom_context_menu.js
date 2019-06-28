@@ -1,135 +1,346 @@
 /* eslint prefer-rest-params: 0 */
 /* eslint no-param-reassign: 0 */
-import customContextMenu from './custommenu/custom_context_menu';
-import customDropDownMenu from './custommenu/custom_dropdown_menu';
-import utils from '../utils';
+/* eslint dot-notation: 0 */
+/* object-shorthand:0 */
+import utils from '../../utils';
 
-const handsonModule = () => {
-	const init = (colHeaders, colInfo, data, projectId, trackerId,trackerContainerRef, isWidget, searchElemRef) => {
-    isWidget = JSON.parse(isWidget);
-    colInfo.map((ele) => {
-      if (ele.type === 'autocomplete') {
-        ele.renderer = 'autocomplete';
-        ele.allowHtml = true;
-        ele.editor = 'ma.AutoCompleteEditor';
-        ele.source = function (query, process) {
-                      jQuery.ajax({
-                        url: '/custom_user_autocomplete',
-                        dataType: 'json',
-                        data: { q: query, },
-                        success: (response) => {
-                          process(response.map(obj => `<span class='hide hot-ma-autocomplete'>${obj.id}:</span><span>${obj.name}</span>`));
-                        },
-                      });
-                  };
-      }
-    });
-    console.info(data);
-		container = document.getElementById(trackerContainerRef);
-    if(!window.HANDSONTABLEINSTANCES) {
-      window.HANDSONTABLEINSTANCES = {};
-    }
-    window.HANDSONTABLEINSTANCES[trackerContainerRef] = new Handsontable(container, {
-      data,
-      colHeaders,
-      columns: colInfo,
-      rowHeaders: getRowHeaderValues.bind(null,data),
-      filters: true,
-      manualColumnResize: false,
-      manualRowResize: false,
-      currentRowClassName: 'currentRow',
-      currentColClassName: 'currentCol',
-      search: true,
-      hiddenColumns: true,
-      autoWrapRow: true,
-      width: '100%',
-      height: '78vh',
-      licenseKey: 'non-commercial-and-evaluation',
-      cells: function (row, column, prop) {
-        const rowData = this.instance.getSourceDataAtRow(row),
-              cellProperties = {};
-        if (Handsontable.helper.isObject(rowData) && rowData.is_locked) cellProperties.readOnly = true;
-        return cellProperties;
-      },
-      afterChange: (changes) => {
-        if (changes !== null) {
-          const changedElements = {};
-          let datarowId,
-              updatedAt;
-
-          changes.forEach(([row, columnId, , newValue]) => {
-            [datarowId, updatedAt] = (document.getElementsByClassName('htDimmed').filter((ele, index) => index === row)[0]).innerHTML.split(',');
-            if (changedElements[datarowId] === undefined) changedElements[datarowId] = {};
-            changedElements[datarowId]['DT_updated'] = updatedAt;
-
-            if (typeof (newValue) !== 'number' && newValue.indexOf('hot-ma-autocomplete') !== -1) {
-              changedElements[datarowId][columnId] = ES6MangoSpring.trackerModule.tracker().extractTextFromHTMLString(newValue);
-            } else {
-              changedElements[datarowId][columnId] = newValue;
-            }
-          });
-
-          jQuery.ajax({
-            url: '/user/v2/tracker/data/bulk_update',
-            type: 'PUT',
-            data: { project_id: projectId, changedElements, tracker_id: trackerId, },
-            success: (response) => {
-              utils.log('response', response);
+const customContextMenu = () => {
+    /**
+     * @description - intialize the custom context menu.
+     * @param - describe below.
+     * @hoInstance - handsontable instance on which context menu is required.
+     * @colHeaders - header values - Array of string.
+     * @colInfo - column configuration - Array of objects.
+     * @isArchiveView - Is Archive view.
+     */
+    const createCustomContextMenu = (hotInstance, colHeaders, colInfo, permissions, isArchiveView = false) => {
+        const customMenu = {};
+        /**
+         * define Menu option here.
+         * every option have three properties.
+         * @name: which will be used to displayed
+         * @function hidden - will return when to hide a custom menu option.
+         * @function disabled - will return when to disable a custom menu option.
+         */
+        customMenu['row_above'] = {
+            name: '<i class="fal fa-arrow-to-top"></i> Insert Record Above',
+            hidden: function () {
+              return !permissions.can_add_import;
             },
-          });
+        };
+        customMenu['row_below'] = {
+            name: '<i class="fal fa-arrow-to-bottom"></i> Insert Record Below',
+            hidden: function () {
+              return !permissions.can_add_import;
+            },
+        };
+        customMenu['sep1'] = '---------';
+        customMenu['duplicate'] = {
+            name: '<i class="fal fa-clone"></i> Duplicate Record',
+            hidden: function () {
+              return !permissions.can_add_import;
+            },
+            disabled: function () {
+              const selectedRows = this.getSelected();
+              if (selectedRows.length > 1) return true;
+            },
+            callback: function () {
+              const rowNumber = this.getSelected()[0][0],
+                    selectedData = this.getDataAtRow(rowNumber);
+              /**
+               * @param 1 - row number to start from
+               * @param 2 - column number to start from.
+               * @param 3 - data require to be filled.
+               * @param 4 - end row
+               * @param 5 - end column
+               * @param 6 - source - populate method
+               * @param 7 - method - shift_down, shift_right, overwrite [ possible values]
+               * @param 8 - method - direction - left,right,up and down.
+               */
+              this.populateFromArray(rowNumber + 1, 1, [selectedData], undefined, undefined, 'edit', 'shift_down', 'down');
+            },
+        };
+        customMenu['expand'] = {
+            name: '<i class="fal fa-expand-alt"></i> Expand Record',
+            disabled: function () {
+              const selectedRows = this.getSelected();
+              if (selectedRows.length > 1) return true;
+            },
+            callback: function () {
+              const rowNumber = this.getSelected()[0][0],
+                trackerID = utils.grabElement('tracker_id').value,
+                trackerViewID = utils.grabElement('tracker_view_id').value,
+                rowId = this.getSourceDataAtRow(rowNumber).id; // gives array
+              // this.getSourceDataAtRow(0) - gives an object.
+              ES6MangoSpring.trackerModule.tracker().initFancybox(`/user/v2/tracker/data/${rowId}/edit?tracker_id=${trackerID}&tracker_view_id=${trackerViewID}`, null, 600);
+            },
+        };
+        customMenu['copyrecord'] = {
+            name: '<i class="fal fa-link"></i> Copy Record URL',
+        };
+        customMenu['lock'] = {
+            name: '<i class="fal fa-lock-alt"></i> Lock Record',
+            disabled: function () {
+              const selectedRows = this.getSelected();
+              if (selectedRows.length > 1) return true;
+            },
+            hidden: function () {
+              const rowNumber = this.getSelected()[0][0],
+                    rowData = this.getSourceDataAtRow(rowNumber);
+              if (rowData.is_locked || !permissions.can_edit_lock_archive) return true;
+            },
+            callback: function () {
+              const rowNumber = this.getSelected()[0][0],
+                    rowData = this.getSourceDataAtRow(rowNumber),
+                    rowId = rowData.id,
+                    trackerId = document.querySelector('input[name="tracker_id"]').value,
+                    projectId = document.querySelector('input[name="project_id"]').value,
+                    rowHeaders = this.getRowHeader();
+              rowHeaders[rowNumber] = `<i class="fa fa-lock-alt"> ${rowHeaders[rowNumber]}`;
+              jQuery.ajax({
+                url: '/ce/pulse/teams/trackers/data/lock',
+                type: 'PUT',
+                data: {
+                  ids: `${rowId}`,
+                  tracker_id: trackerId,
+                  project_id: projectId,
+                },
+                success: () => {
+                  rowData.is_locked = true;
+                  hotInstance.updateSettings({
+                    rowHeaders,
+                    cells: (row) => {
+                      const cellProperties = {};
+                      if (row === rowNumber) {
+                        cellProperties.readOnly = true;
+                      }
+                      return cellProperties;
+                    },
+                  });
+                },
+              });
+            },
+        };
+        customMenu['unlock'] = {
+            name: '<i class="fal fa-unlock-alt"></i> Unlock Record',
+            disabled: function () {
+                const selectedRows = this.getSelected();
+                if (selectedRows.length > 1) return true;
+            },
+            hidden: function () {
+              const rowNumber = this.getSelected()[0][0],
+                    rowData = this.getSourceDataAtRow(rowNumber);
+              if (!rowData.is_locked || !permissions.can_edit_lock_archive) return true;
+            },
+            callback: function () {
+              const rowNumber = this.getSelected()[0][0],
+                    rowData = this.getSourceDataAtRow(rowNumber),
+                    rowId = rowData.id,
+                    trackerId = document.querySelector('input[name="tracker_id"]').value,
+                    projectId = document.querySelector('input[name="project_id"]').value,
+                    rowHeaders = this.getRowHeader();
+
+              rowHeaders[rowNumber] = rowNumber;
+
+              jQuery.ajax({
+                url: '/ce/pulse/teams/trackers/data/unlock',
+                type: 'PUT',
+                data: {
+                  ids: `${rowId}`,
+                  tracker_id: trackerId,
+                  project_id: projectId,
+                },
+                success: () => {
+                  rowData.is_locked = false;
+                  hotInstance.updateSettings({
+                    rowHeaders,
+                    cells: (row) => {
+                      const cellProperties = {};
+                      if (row === rowNumber) {
+                        cellProperties.readOnly = false;
+                      }
+                      return cellProperties;
+                    },
+                  });
+                },
+              });
+            },
+        };
+        customMenu['sep2'] = '---------';
+        /* customMenu['col_left'] = {
+            name: '<i class="fal fa-arrow-to-left"></i> Insert column left',
+            disabled: function () {
+              const selectedRows = this.getSelected();
+              if (selectedRows.length > 1) return true;
+            },
+            callback: function () {
+              const columnNumber = hotInstance.getSelected()[0][1],
+                    columnLength = colInfo.length;
+              colInfo.push({});
+              colHeaders.push('Untitled');
+              utils.reArrangeArray(colInfo, columnLength, columnNumber);
+              utils.reArrangeArray(colHeaders, columnLength, columnNumber);
+              hotInstance.updateSettings({
+                columns: colInfo,
+                colHeaders,
+              });
+            },
+        };
+        customMenu['col_right'] = {
+            name: '<i class="fal fa-arrow-to-right"></i> Insert column Right',
+            disabled: function () {
+              const selectedRows = this.getSelected();
+              if (selectedRows.length > 1) return true;
+            },
+            callback: function () {
+              const columnNumber = hotInstance.getSelected()[0][1],
+                    columnLength = colInfo.length;
+              colInfo.push({});
+              colHeaders.push('Untitled');
+              utils.reArrangeArray(colInfo, columnLength, columnNumber + 1);
+              utils.reArrangeArray(colHeaders, columnLength, columnNumber + 1);
+              hotInstance.updateSettings({
+                columns: colInfo,
+                colHeaders,
+              });
+            },
+        };
+        customMenu['clear_column'] = {
+            name: '<i class="fal fa-minus-circle"></i> Clear Column',
+        };
+        customMenu['remove_col'] = {
+            name: '<i class="fal fa-trash-alt"></i> Delete Column',
+            disabled: function () {
+              // for which cells it should be disabled
+            },
+            callback: function () {
+              const columnNumber = hotInstance.getSelected()[0][1];
+              colInfo.splice(columnNumber, 1);
+              colHeaders.splice(columnNumber, 1);
+              hotInstance.updateSettings({
+                columns: colInfo,
+                colHeaders,
+              });
+            },
+        };
+        // creating a separator.
+        customMenu['sep3'] = '---------'; */
+        // If Archive view.
+        if (!isArchiveView) {
+            customMenu['archive'] = {
+                name: '<i class="fal fa-archive"></i> Archive Record',
+                hidden: function () {
+                  return !permissions.can_edit_lock_archive;
+                },
+                disabled: function () {
+                  const rowNumber = this.getSelected()[0][0];
+                  return this.getSourceDataAtRow(rowNumber).is_locked;
+                },
+                callback: function () {
+                  const rowNumber = this.getSelected()[0][0],
+                        rowId = this.getSourceDataAtRow(rowNumber).id,
+                        trackerId = document.querySelector('input[name="tracker_id"]').value;
+
+                  jQuery.ajax({
+                    url: '/user/v2/tracker/data/archive',
+                    type: 'PUT',
+                    data: {
+                      ids: `${rowId}`,
+                      tracker_id: trackerId,
+                      v2: true,
+                    },
+                    success: (response) => {
+                      if (response.archive_view_id) {
+                        const options = {},
+                              viewSelect = document.getElementById('view'),
+                              selectedValue = viewSelect.value;
+                        viewSelect.options.forEach((ele) => { options[ele.value] = ele.innerText; });
+                        options[response.archive_view_id] = response.archive_view_name;
+                        while (viewSelect.firstChild) viewSelect.removeChild(viewSelect.firstChild);
+                        Object.keys(options).each((key) => {
+                          viewSelect.options[viewSelect.options.length] = new Option(options[key], key);
+                        });
+                        viewSelect.value = selectedValue;
+                        hotInstance.alter('remove_row', rowNumber);
+                        jQuery('#notice').html('Row archived successfully.').show();
+                        hideNotice('#notice');
+                      }
+                    },
+                  });
+                },
+            };
         }
-      },
-      afterSelection: () => {},
-      beforeOnCellMouseUp: function (event, coords, td) {
-        /* if columnHeader/rowHeader is clicked - ignore
-        if user double clicks - ignore.
-        if user clicks on apart from I tag - ignore. */
-        if ((coords.row < 0 || coords.col < 0) || event.detail === 2 || event.target.tagName !== 'I' || this.getSourceDataAtRow(coords.row).is_locked) {
-          return;
+
+        if (isArchiveView) {
+          customMenu['unarchive'] = {
+            name: '<i class="fal fa-archive"></i> Unarchive Record',
+            hidden: function () {
+              return !permissions.can_edit_lock_archive;
+            },
+            disabled: function () {
+              const rowNumber = this.getSelected()[0][0];
+              return this.getSourceDataAtRow(rowNumber).is_locked;
+            },
+            callback: function () {
+              const rowNumber = this.getSelected()[0][0],
+                    rowId = this.getSourceDataAtRow(rowNumber).id,
+                    trackerId = document.querySelector('input[name="tracker_id"]').value,
+                    projectId = document.querySelector('input[name="project_id"]').value;
+
+              jQuery.ajax({
+                url: '/ce/pulse/teams/trackers/data/unarchive',
+                type: 'PUT',
+                data: {
+                  ids: `${rowId}`,
+                  tracker_id: trackerId,
+                  project_id: projectId,
+                },
+                success: (response) => {
+                  hotInstance.alter('remove_row', rowNumber);
+                  jQuery('#notice').html('Row unarchived successfully.').show();
+                  hideNotice('#notice');
+                },
+              });
+            },
+
+          };
         }
-        const activeEditor = this.getActiveEditor();
-        // Select the cell that we want to edit.
-        this.selectCell(coords.row, coords.col);
-        activeEditor.beginEditing();
-      },
-    });
-    // Hide on widgets.
-    if(!isWidget) {
-      // Create Context Menu for handsontable.
-      window.HANDSONTABLEINSTANCES[trackerContainerRef].updateSettings({
-        contextMenu: {
-          items: customContextMenu().createCustomContextMenu(window.HANDSONTABLEINSTANCES[trackerContainerRef], colHeaders, colInfo),
-        },
-        dropdownMenu: {
-          items: customDropDownMenu().createCustomDropDownMenu(window.HANDSONTABLEINSTANCES[trackerContainerRef], colHeaders, colInfo),
-        },
-      });  
-    }
-    bindSearchEvent(searchElemRef, window.HANDSONTABLEINSTANCES[trackerContainerRef]);
-  },
+        customMenu['remove_row'] = {
+            name: '<i class="fal fa-trash-alt"></i> Delete Record',
+            hidden: function () {
+              return !permissions.can_delete;
+            },
+            disabled: function () {
+              const rowNumber = this.getSelected()[0][0];
+              return this.getSourceDataAtRow(rowNumber).is_locked;
+            },
+            callback: function() {
+              const rowNumber = this.getSelected()[0][0],
+                rowData = this.getSourceDataAtRow(rowNumber),
+                rowId = rowData.id,
+                trackerId = document.querySelector('input[name="tracker_id"]').value,
+                projectId = document.querySelector('input[name="project_id"]').value;
+              jQuery.ajax({
+                url: '/ce/pulse/teams/trackers/data/delete_all',
+                type: 'DELETE',
+                data: {
+                  id: [rowId],
+                  tracker_id: trackerId,
+                  project_id: projectId
+                },
+                success: (response) => {
+                  hotInstance.alter('remove_row', rowNumber);
+                  jQuery('#notice').html('Row deleted successfully.').show();
+                  hideNotice('#notice');
+                },
+              });
+            }
+        };
+        return customMenu;
+    };
 
-  getRowHeaderValues = function (data,index) {
-    if(data[index].is_locked) {
-      return `<i class="fa fa-lock-alt"> ${index}`;
-    } else {
-      return index;
-    }
-  },
-
-  bindSearchEvent = (searchElemRef, hotInstance) => {
-    const searchElem = utils.grabClassElements(searchElemRef);
-    if (searchElem[0] !== undefined) {
-      Handsontable.dom.addEvent(searchElem[0], 'keyup', function () {
-        const search = hotInstance.getPlugin('search');
-        search.query(this.value);
-        hotInstance.render();
-      });
-    }
-  };
-
-	return {
-		init,
-	};
+    return {
+        createCustomContextMenu,
+    };
 };
-
-export default handsonModule;
+export default customContextMenu;
