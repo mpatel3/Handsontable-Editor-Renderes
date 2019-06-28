@@ -1,17 +1,17 @@
 /* eslint prefer-rest-params: 0 */
 /* eslint no-param-reassign: 0 */
 import utils from '../utils';
-import handsonOverride from './handson_override';
 import handsonModule from './handson_module';
 import CustomCheckBoxEditor from './customeditor/custom_checkbox_editor';
 import CustomRadioBoxEditor from './customeditor/custom_radio_editor';
 import CustomRichTextBoxEditor from './customeditor/custom_richtextbox_editor';
+import CustomAutoCompleteEditor from './customeditor/custom_autocomplete_editor';
+import Filter from './filter';
 
 function tracker() {
   const init = () => {
     bindEvents();
     templateTrackerCreate();
-
   },
 
   initFancybox = (url, content, width, callback) => {
@@ -66,7 +66,7 @@ function tracker() {
       });
     });
 
-    if (importTracker !== undefined) {
+    if (importTracker) {
       importTracker.addEventListener('click', () => {
         initFancybox('/user/v2/trackers/import_from_spreadsheet', null, 480, () => {
           if (jQuery('#myFormTeams').length) {
@@ -97,7 +97,12 @@ function tracker() {
   createTrackerFromTemplate = (templateId, trackerName) => {
     initFancybox(`/user/v2/trackers/new?template_id=${templateId}&tracker_name=${trackerName}`, null, 900, () => {
       // for create tracker
-      if (jQuery('#myFormTeams').length) {
+      trackerNewEditCodeInitalization();
+    });
+  },
+
+  trackerNewEditCodeInitalization = () => {
+    if (jQuery('#myFormTeams').length) {
         jQuery('#myFormTeams').tokenInput(
           '/autocomplete?scope=teams_with_tracker_enabled', {
             theme: 'facebook',
@@ -109,21 +114,27 @@ function tracker() {
           }
         );
       }
-      shortcutIconInitalization();
-      colorCodeInitalization();
-    });
+    const convAutocomplete = document.getElementById('myFormTeams'),
+          convId = convAutocomplete.dataset.trackerid;
+    if (convId) {
+      jQuery('#myFormTeams').tokenInput('add', JSON.parse(convId));
+    }
+    shortcutIconInitalization();
+    colorCodeInitalization();
   },
 
   bindTrackerSettingEvents = () => {
     const trackerId = utils.grabElement('tracker-master-id').value;
     shareTracker(trackerId);
+    editTrackerProperties(trackerId);
     manageTrackerPermission(trackerId);
     notificationPref(trackerId);
     importDataToTracker(trackerId);
     cloneTracker(trackerId);
     moveTracker(trackerId);
-    archiveTracker(trackerId);
-    deleteTracker(trackerId);
+    archiveTrackerConfirmation(trackerId);
+    deleteTrackerConfirmation(trackerId);
+    addViewToCalendar(trackerId);
   },
 
   saveShareConfigData = (url, data) => {
@@ -137,149 +148,210 @@ function tracker() {
 
   shareTracker = (trackerId) => {
     const shareTrackerBtn = utils.grabElement('tracker-view-share-btn');
-    shareTrackerBtn.addEventListener('click', () => {
-      initFancybox(`/user/v2/trackers/setting_dialog?tracker_id=${trackerId}&type=share_view`, null, 600, () => {
-        const showHideShareOptions = utils.grabElement('tracker-view-share'),
-              publicShareTrackerView = utils.grabElement('public-share-tracker-view'),
-              copyShareLink = utils.grabElement('view-copy-share-link'),
-              copyMessage = utils.grabElement('copyMessageShareLink'),
-              textInput = utils.grabElement('share_link_input'),
-              submitSettingsBtn = utils.grabElement('save-share-settings'),
-              trackerViewEditPermissionsMode = utils.grabElement('trackerViewEditPermissionsMode'),
-              trackerViewType = utils.grabElement('trackerViewType'),
-              submitUrl = submitSettingsBtn.getAttribute('url');
+    if (shareTrackerBtn) {
+      shareTrackerBtn.addEventListener('click', () => {
+        initFancybox(`/user/v2/trackers/setting_dialog?tracker_id=${trackerId}&type=share_view`, null, 600, () => {
+          const showHideShareOptions = utils.grabElement('tracker-view-share'),
+                publicShareTrackerView = utils.grabElement('public-share-tracker-view'),
+                copyShareLink = utils.grabElement('view-copy-share-link'),
+                copyMessage = utils.grabElement('copyMessageShareLink'),
+                textInput = utils.grabElement('share_link_input'),
+                submitSettingsBtn = utils.grabElement('save-share-settings'),
+                trackerViewEditPermissionsMode = utils.grabElement('trackerViewEditPermissionsMode'),
+                trackerViewType = utils.grabElement('trackerViewType'),
+                trackerViewEdit = utils.grabElement('trackerShareViewPermission');
 
-        showHideShareOptions.addEventListener('change', () => {
-          toggleShareOptions(submitUrl, showHideShareOptions);
-        });
+          showHideShareOptions.addEventListener('change', () => {
+            toggleShareOptions(`/user/v2/tracker/views/${trackerViewType.value}/update_settings`, showHideShareOptions);
+          });
 
-        publicShareTrackerView.addEventListener('change', () => {
-          saveShareConfigData(submitUrl, { public_access: publicShareTrackerView.checked, });
-        });
+          publicShareTrackerView.addEventListener('change', () => {
+            saveShareConfigData(`/user/v2/tracker/views/${trackerViewType.value}/update_settings`, { public_access: publicShareTrackerView.checked });
+          });
 
-        copyShareLink.addEventListener('click', () => {
-          textInput.select();
-          document.execCommand('copy');
-          getSelection().removeAllRanges();
-          copyMessage.style.display = 'inline';
-          setTimeout(() => { copyMessage.style.display = 'none'; }, 300);
-        });
+          copyShareLink.addEventListener('click', () => {
+            textInput.select();
+            document.execCommand('copy');
+            getSelection().removeAllRanges();
+            copyMessage.style.display = 'inline';
+            setTimeout(() => { copyMessage.style.display = 'none'; }, 300);
+          });
 
-        submitSettingsBtn.addEventListener('click', () => {
-          jQuery.fancybox.close();
-        });
+          submitSettingsBtn.addEventListener('click', () => {
+            jQuery.fancybox.close();
+          });
 
-        trackerViewEditPermissionsMode.addEventListener('change', (event) => {
-          saveShareConfigData(submitUrl, { edit_access: event.target.selectedOptions[0].value, });
-        });
+          trackerViewEditPermissionsMode.addEventListener('change', (event) => {
+            saveShareConfigData(`/user/v2/tracker/views/${trackerViewType.value}/update_settings`, { edit_access: event.target.selectedOptions[0].value });
+          });
 
-        trackerViewType.addEventListener('change', (event) => {
-          const selectedOption = event.target.selectedOptions[0].dataset;
-          textInput.value = selectedOption.shareLink;
-          showHideShareOptions.checked = selectedOption.isShared === 'true';
-          publicShareTrackerView.checked = selectedOption.isShared === 'true';
-          trackerViewEditPermissionsMode.value = selectedOption.editAccess;
-          toggleShareOptions(showHideShareOptions);
+          // trackerViewEdit
+          trackerViewType.addEventListener('change', (event) => {
+            const selectedOption = event.target.selectedOptions[0].dataset;
+            textInput.value = selectedOption.shareLink;
+            showHideShareOptions.checked = selectedOption.isShared === 'true';
+            publicShareTrackerView.checked = selectedOption.isShared === 'true';
+            trackerViewEditPermissionsMode.value = selectedOption.editAccess;
+            toggleShareOptions('', showHideShareOptions);
+          });
         });
       });
-    });
+    }
   },
 
   manageTrackerPermission = (trackerId) => {
     const trackerPermission = utils.grabElement('manage-tracker-permissions');
-    trackerPermission.addEventListener('click', () => {
-      initFancybox(`/user/v2/trackers/setting_dialog?tracker_id=${trackerId}&type=manage_permission`, null, 600, () => {
-        const memberAddImport = utils.grabElement('setting-member-add-import'),
-              memberEditArchiveLock = utils.grabElement('setting-member-edit-archive-lock'),
-              memberDeleteRecord = utils.grabElement('setting-member-delete-record'),
-              memberShareViews = utils.grabElement('setting-member-share-views'),
-              guestAddImport = utils.grabElement('setting-guest-add-import'),
-              guestEditArchiveLock = utils.grabElement('setting-guest-edit-archive-lock'),
-              guestDeleteRecord = utils.grabElement('setting-guest-delete-record'),
-              guestShareViews = utils.grabElement('setting-guest-share-views'),
-              submitUrl = utils.grabElement('manage-tracker-permissions').getAttribute('url');
+    if (trackerPermission) {
+      trackerPermission.addEventListener('click', () => {
+        initFancybox(`/user/v2/trackers/setting_dialog?tracker_id=${trackerId}&type=manage_permission`, null, 600, () => {
+          const memberAddImport = utils.grabElement('setting-member-add-import'),
+                memberEditArchiveLock = utils.grabElement('setting-member-edit-archive-lock'),
+                memberDeleteRecord = utils.grabElement('setting-member-delete-record'),
+                memberShareViews = utils.grabElement('setting-member-share-views'),
+                guestAddImport = utils.grabElement('setting-guest-add-import'),
+                guestEditArchiveLock = utils.grabElement('setting-guest-edit-archive-lock'),
+                guestDeleteRecord = utils.grabElement('setting-guest-delete-record'),
+                guestShareViews = utils.grabElement('setting-guest-share-views'),
+                submitUrl = utils.grabElement('manage-tracker-permissions').getAttribute('url');
 
-        memberAddImport.addEventListener('change', () => {
-          saveShareConfigData(submitUrl, { tracker_settings: { member_add_import_record: memberAddImport.checked ? 1 : 0, }, });
-        });
+          memberAddImport.addEventListener('change', () => {
+            saveShareConfigData(submitUrl, { tracker_settings: { member_add_import_record: memberAddImport.checked ? 1 : 0, }, });
+          });
 
-        memberEditArchiveLock.addEventListener('change', () => {
-          saveShareConfigData(submitUrl, { tracker_settings: { member_edit_lock_archive_record: memberEditArchiveLock.checked ? 1 : 0, }, });
-        });
+          memberEditArchiveLock.addEventListener('change', () => {
+            saveShareConfigData(submitUrl, { tracker_settings: { member_edit_lock_archive_record: memberEditArchiveLock.checked ? 1 : 0, }, });
+          });
 
-        memberDeleteRecord.addEventListener('change', () => {
-          saveShareConfigData(submitUrl, { tracker_settings: { member_delete_record: memberDeleteRecord.checked ? 1 : 0, }, });
-        });
+          memberDeleteRecord.addEventListener('change', () => {
+            saveShareConfigData(submitUrl, { tracker_settings: { member_delete_record: memberDeleteRecord.checked ? 1 : 0, }, });
+          });
 
-        memberShareViews.addEventListener('change', () => {
-          saveShareConfigData(submitUrl, { tracker_settings: { member_share_views: memberShareViews.checked ? 1 : 0, }, });
-        });
+          memberShareViews.addEventListener('change', () => {
+            saveShareConfigData(submitUrl, { tracker_settings: { member_share_views: memberShareViews.checked ? 1 : 0, }, });
+          });
 
-        guestAddImport.addEventListener('change', () => {
-          saveShareConfigData(submitUrl, { tracker_settings: { guest_add_import_record: guestAddImport.checked ? 1 : 0, }, });
-        });
+          guestAddImport.addEventListener('change', () => {
+            saveShareConfigData(submitUrl, { tracker_settings: { guest_add_import_record: guestAddImport.checked ? 1 : 0, }, });
+          });
 
-        guestEditArchiveLock.addEventListener('change', () => {
-          saveShareConfigData(submitUrl, { tracker_settings: { guest_edit_lock_archive_record: guestEditArchiveLock.checked ? 1 : 0, }, });
-        });
+          guestEditArchiveLock.addEventListener('change', () => {
+            saveShareConfigData(submitUrl, { tracker_settings: { guest_edit_lock_archive_record: guestEditArchiveLock.checked ? 1 : 0, }, });
+          });
 
-        guestDeleteRecord.addEventListener('change', () => {
-          saveShareConfigData(submitUrl, { tracker_settings: { guest_delete_record: guestDeleteRecord.checked ? 1 : 0, }, });
-        });
+          guestDeleteRecord.addEventListener('change', () => {
+            saveShareConfigData(submitUrl, { tracker_settings: { guest_delete_record: guestDeleteRecord.checked ? 1 : 0, }, });
+          });
 
-        guestShareViews.addEventListener('change', () => {
-          saveShareConfigData(submitUrl, { tracker_settings: { guest_share_views: guestShareViews.checked ? 1 : 0, }, });
+          guestShareViews.addEventListener('change', () => {
+            saveShareConfigData(submitUrl, { tracker_settings: { guest_share_views: guestShareViews.checked ? 1 : 0, }, });
+          });
         });
       });
-    });
+    }
+  },
+
+  editTrackerProperties = (trackerId) => {
+    const editTrackerProperties = utils.grabElement('edit-tracker-properties');
+    if (editTrackerProperties) {
+      editTrackerProperties.addEventListener('click', () => {
+        initFancybox(`/user/v2/trackers/setting_dialog?tracker_id=${trackerId}&type=edit_tracker_properties`, null, 700, () => {
+          trackerNewEditCodeInitalization();
+        });
+      });
+    }
   },
 
   notificationPref = (trackerId) => {
     const trackerPermission = utils.grabElement('notification-pref');
-    trackerPermission.addEventListener('click', () => {
-      initFancybox(`/user/v2/trackers/setting_dialog?tracker_id=${trackerId}&type=notification_pref`, null, 600, () => {
+    if (trackerPermission) {
+      trackerPermission.addEventListener('click', () => {
+        initFancybox(`/user/v2/trackers/setting_dialog?tracker_id=${trackerId}&type=notification_pref`, null, 600, () => {
+        });
       });
-    });
+    }
   },
 
   importDataToTracker = (trackerId) => {
     const trackerPermission = utils.grabElement('import-data-to-tracker');
-    trackerPermission.addEventListener('click', () => {
-      initFancybox(`/user/v2/trackers/setting_dialog?tracker_id=${trackerId}&type=import_data_tracker`, null, 1000, () => {
+    if (trackerPermission) {
+      trackerPermission.addEventListener('click', () => {
+        initFancybox(`/user/v2/trackers/setting_dialog?tracker_id=${trackerId}&type=import_data_tracker`, null, 650, () => {
+        });
       });
-    });
+    }
   },
 
   cloneTracker = (trackerId) => {
     const trackerPermission = utils.grabElement('clone-tracker-v2');
-    trackerPermission.addEventListener('click', () => {
-      initFancybox(`/user/v2/trackers/setting_dialog?tracker_id=${trackerId}&type=clone_tracker`, null, 600, () => {
+    if (trackerPermission) {
+      trackerPermission.addEventListener('click', () => {
+        initFancybox(`/user/v2/trackers/setting_dialog?tracker_id=${trackerId}&type=clone_tracker`, null, 600, () => {
+        });
+        if (jQuery('#myFormTeams').length) {
+          jQuery('#myFormTeams').tokenInput(
+            '/autocomplete?scope=teams_with_tracker_enabled', {
+              theme: 'facebook',
+              tokenLimit: 1,
+              minChars: 1,
+              searchDelay: 1000,
+              hintText: team_typeahead_text,
+              defaultText: team_typeahead_text,
+            }
+          );
+        }
+        const cloneSubmitBtn = document.getElementById('clone-submit-btn');
+        jQuery('#clone-submit-btn').off('submit').on('submit', (event) => {
+          const url = event.target.dataset.url;
+          jQuery.ajax({
+            url,
+            type: 'POST',
+            data: jQuery('#clone_tracker_form').serialize(),
+          }).done(() => {
+            jQuery.fancybox.close();
+          });
+        });
       });
-    });
+    }
   },
 
   moveTracker = (trackerId) => {
     const trackerPermission = utils.grabElement('move-tracker-v2');
-    trackerPermission.addEventListener('click', () => {
-      initFancybox(`/user/v2/trackers/setting_dialog?tracker_id=${trackerId}&type=move_tracker`, null, 600, () => {
+    if (trackerPermission) {
+      trackerPermission.addEventListener('click', () => {
+        initFancybox(`/user/v2/trackers/setting_dialog?tracker_id=${trackerId}&type=move_tracker`, null, 600, () => {
+        });
       });
-    });
+    }
   },
 
-  archiveTracker = (trackerId) => {
+  archiveTrackerConfirmation = (trackerId) => {
     const trackerPermission = utils.grabElement('archive-tracker-v2');
-    trackerPermission.addEventListener('click', () => {
-      initFancybox(`/user/v2/trackers/setting_dialog?tracker_id=${trackerId}&type=archive_tracker`, null, 600, () => {
+    if (trackerPermission) {
+      trackerPermission.addEventListener('click', () => {
+        initFancybox(`/user/v2/trackers/setting_dialog?tracker_id=${trackerId}&type=archive_tracker`, null, 600, () => {
+        });
       });
-    });
+    }
   },
 
-  deleteTracker = (trackerId) => {
+  deleteTrackerConfirmation = (trackerId) => {
     const trackerPermission = utils.grabElement('delete-tracker-v2');
-    trackerPermission.addEventListener('click', () => {
-      initFancybox(`/user/v2/trackers/setting_dialog?tracker_id=${trackerId}&type=delete_tracker`, null, 600, () => {
+    if (trackerPermission) {
+      trackerPermission.addEventListener('click', () => {
+        initFancybox(`/user/v2/trackers/setting_dialog?tracker_id=${trackerId}&type=delete_tracker`, null, 600, () => {
+        });
       });
-    });
+    }
+  },
+
+  addViewToCalendar = (trackerId) => {
+    const addViewToCalendarBtn = utils.grabElement('add-view-to-calendar-v2');
+    if (addViewToCalendarBtn) {
+      addViewToCalendarBtn.addEventListener('click', () => {
+        initFancybox(`/user/v2/trackers/setting_dialog?tracker_id=${trackerId}&type=add_view_to_calendar`, null, 600, () => {
+        });
+      });
+    }
   },
 
   toggleShareOptions = (url, showHideShareOptions) => {
@@ -289,7 +361,8 @@ function tracker() {
     } else {
       showHideShareContainer.style.display = 'none';
     }
-    saveShareConfigData(url, { is_shared: showHideShareOptions.checked, });
+
+    url ? saveShareConfigData(url, { is_shared: showHideShareOptions.checked, }) : '';
   },
 
   colorCodeInitalization = () => {
@@ -371,7 +444,7 @@ function tracker() {
   },
 
   binderTrackerTableEvents = () => {
-    const viewSelect = document.querySelector('.trackerViewSelect')
+    const viewSelect = document.querySelector('.trackerViewSelect');
     if (viewSelect !== undefined && viewSelect !== null) {
       viewSelect.on('change', (event) => {
         const trackerID = document.querySelector('input[name="tracker_id"]').value;
@@ -383,6 +456,7 @@ function tracker() {
             dataType: 'script',
             type: 'get',
             success: () => {
+              bindTrackerSettingEvents();
             },
           });
         }
@@ -452,7 +526,7 @@ function tracker() {
       title: _i18n_bkp('confirmation-dialogue'),
       button_text: [_i18n_bkp('ok-button'), _i18n_bkp('Cancel')],
       label: _i18n('Are you sure you want to remove this view?'),
-      handleYes: function() {
+      handleYes: function () {
         this.hide();
         jQuery.ajax({
           url,
@@ -472,28 +546,99 @@ function tracker() {
           },
         });
       },
-      handleNo: function() {
+      handleNo: function () {
         this.hide();
         return false;
       },
     });
   },
 
-  pinTracker = (event) => {
-    const url = event.target.dataset.url;
+  pinTracker = (event, insideTracker) => {
+    const url = event.target.closest('a').dataset.url;
     jQuery.ajax({
       url,
       type: 'PUT',
-    }).done(() => {
+    }).done((resp) => {
+      const pinElem = utils.grabElement(`tracker-v2-pinit-${resp.tracker_id}${insideTracker}`),
+            unPinElem = utils.grabElement(`tracker-v2-unpinit-${resp.tracker_id}${insideTracker}`),
+            pinnedSection = utils.grabElement('tracker-pinned-section');
+
+      pinElem.classList.add('hide_important');
+      unPinElem.classList.remove('hide_important');
+
+      if (pinnedSection !== null) {
+        if (insideTracker !== '') {
+          utils.grabElement(`tracker-v2-pinit-${resp.tracker_id}`).classList.add('hide_important');
+          utils.grabElement(`tracker-v2-unpinit-${resp.tracker_id}`).classList.remove('hide_important');
+        }
+
+        if (resp.content !== '') {
+          pinnedSection.innerHTML = resp.content;
+          utils.grabElement('tracker-index-container').classList.add('one-child-rhs');
+          utils.grabElement('tracker-content-section').style.marginLeft = '295px';
+        }
+      }
     });
   },
 
-  unPinTracker = (event) => {
-    const url = event.target.dataset.url;
+  unPinTracker = (event, insideTracker) => {
+    const url = event.target.closest('a').dataset.url;
     jQuery.ajax({
       url,
       type: 'PUT',
-    }).done(() => {
+    }).done((resp) => {
+      const pinElem = utils.grabElement(`tracker-v2-pinit-${resp.tracker_id}${insideTracker}`),
+            unPinElem = utils.grabElement(`tracker-v2-unpinit-${resp.tracker_id}${insideTracker}`),
+            pinnedSection = utils.grabElement('tracker-pinned-section'),
+            pinnedContent = utils.grabElement(`pinned_content_${resp.tracker_id}`);
+
+      pinElem.classList.remove('hide_important');
+      unPinElem.classList.add('hide_important');
+      (pinnedContent != null) ? pinnedContent.remove() : '';
+
+      if (pinnedSection !== null) {
+        if (insideTracker !== '') {
+          utils.grabElement(`tracker-v2-pinit-${resp.tracker_id}`).classList.remove('hide_important');
+          utils.grabElement(`tracker-v2-unpinit-${resp.tracker_id}`).classList.add('hide_important');
+        }
+
+        if (utils.grabClassElements('tracker-pinned-rhs-widget').length === 0) {
+          pinnedSection.innerHTML = '';
+          utils.grabElement('tracker-content-section').style.marginLeft = '0px';
+        }
+      }
+    });
+  },
+
+  deleteTracker = (trackerId) => {
+    jQuery.ajax({
+      url: `/user/v2/trackers/${trackerId}`,
+      type: 'DELETE',
+    }).done((resp) => {
+      if (resp.status === 'ok') {
+        jQuery('#notice').html(resp.msg).show();
+        hideNotice('#notice');
+        window.location.reload();
+      } else {
+        jQuery('#error').html(resp.msg).show();
+        hideNotice('#error');
+      }
+    });
+  },
+
+  archiveTracker = (trackerId, toBeEnabled) => {
+    jQuery.ajax({
+      url: `/user/v2/trackers/${trackerId}/archive?enabled=${toBeEnabled}`,
+      type: 'PUT',
+    }).done((resp) => {
+      if (resp.status === 'ok') {
+        jQuery('#notice').html(resp.msg).show();
+        hideNotice('#notice');
+        window.location.reload();
+      } else {
+        jQuery('#error').html(resp.msg).show();
+        hideNotice('#error');
+      }
     });
   },
 
@@ -567,8 +712,115 @@ function tracker() {
     });
   },
 
+  hideColumn = (hotInstance, colId, colNumber) => {
+    const trackerId = document.querySelector('input[name="tracker_id"]').value,
+          trackerViewId = document.querySelector('input[name="tracker_view_id"]').value,
+          url = `/user/v2/tracker/views/${trackerViewId}/tracker_view_columns/hide_column?tracker_id=${trackerId}&tracker_column_id=${colId}`;
+
+    jQuery.ajax({
+      url,
+      type: 'PUT',
+      dataType: 'JSON',
+      success: (response) => {
+        if (response.success) {
+          jQuery.fancybox.close();
+          let columArray = [];
+          columArray = Handsontable.helper.deepClone(hotInstance.getPlugin('hiddenColumns').hiddenColumns);
+          columArray.push(colNumber);
+          hotInstance.updateSettings({
+            hiddenColumns: {
+              columns: columArray,
+              indicators: true,
+            },
+          });
+        }
+      },
+    });
+  },
+
+  deleteColumn = (hotInstance, colId, colNumber) => {
+    const trackerId = document.querySelector('input[name="tracker_id"]').value,
+          trackerViewId = document.querySelector('input[name="tracker_view_id"]').value,
+          url = `/user/v2/tracker/tracker_columns/${colId}?tracker_id=${trackerId}&tracker_view_id=${trackerViewId}`;
+
+    jQuery.ajax({
+      url,
+      type: 'DELETE',
+      dataType: 'JSON',
+      success: (response) => {
+        if (response.success) {
+          jQuery.fancybox.close();
+          jQuery('#notice').html(response.message).show();
+          hideNotice('#notice');
+
+          let columArray = [];
+          columArray = Handsontable.helper.deepClone(hotInstance.getPlugin('hiddenColumns').hiddenColumns);
+          columArray.push(colNumber);
+          hotInstance.updateSettings({
+            hiddenColumns: {
+              columns: columArray,
+              indicators: true,
+            },
+          });
+        }
+      },
+    });
+  },
+
+  formViewInitialize = (containerId) => {
+    MSTracker.initEditor();
+    MSTracker.MsTrackerView.prototype.resetDateInput(jQuery(`#${containerId}`));
+
+    jQuery(`#${containerId}`).find('input[data-type="AC"], input[data-type="UL"], input[data-type="TL"]').each(function () {
+      const el = jQuery(this),
+        sourceUrl = el.attr('data-url'),
+        placeholder = el.attr('placeholder'),
+        val = el.val();
+
+      jQuery(this).tokenInput(
+        sourceUrl,
+        {
+          theme: 'facebook',
+          tokenLimit: 1,
+          minChars: 1,
+          searchDelay: 1000,
+          hintText: placeholder,
+          defaultText: placeholder,
+          searchingText: false,
+        }
+      );
+
+      if (el.data('tokenInputObject') !== undefined) {
+        if (val === '') return el.tokenInput('clear');
+        const tval = val.split(':');
+        el.tokenInput('clear');
+        el.tokenInput('add', { id: tval[0], name: tval[1], });
+        el.val(val);
+      }
+    });
+  },
+
   trackerFromView = () => {
     const bindEvents = () => {
+      // document.querySelectorAll('input[name="configuration[after_submit]"]').forEach((ele) => {
+        // ele.off('change').on('change', (event) => {
+        // });
+      // });
+
+      jQuery('#formViewConfigurationForm').validate({
+        rules: {
+          'configuration[button_text]': {
+            required: true,
+          },
+          'configuration[success_msg]': {
+            required: () => document.querySelector('input[name="configuration[after_submit]"]:checked').value === 'message',
+          },
+          'configuration[redirect_url]': {
+            required: () => document.querySelector('input[name="configuration[after_submit]"]:checked').value === 'redirect',
+            url: true,
+          },
+        },
+      });
     },
 
     allowDrop = (event) => {
@@ -722,6 +974,30 @@ function tracker() {
       initFancybox(null, '<div id="initTrackerColumnFormWrpp"></div>', 650, () => {
         amplify.publish('initTrackerColumnForm', objectData);
       });
+    },
+
+    saveConfiguration = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (jQuery('form#formViewConfigurationForm').valid()) {
+        const data = jQuery('form#formViewConfigurationForm').serializeArray(),
+              trackerID = document.querySelector('input[name="tracker_id"]').value,
+              trackerViewId = document.querySelector('input[name="tracker_view_id"]').value,
+              url = `/user/v2/tracker/views/${trackerViewId}/update_configuration?tracker_id=${trackerID}`;
+
+        jQuery.ajax({
+          url,
+          type: 'PUT',
+          data,
+          success: (response) => {
+            if (response.success) {
+              jQuery('#notice').html(response.message).show();
+              hideNotice('#notice');
+            }
+          },
+        });
+      }
     };
 
     return {
@@ -734,6 +1010,7 @@ function tracker() {
       addNewColumnDialog,
       addAllField,
       removeAllField,
+      saveConfiguration,
     };
   };
 
@@ -754,16 +1031,23 @@ function tracker() {
     deleteView,
     pinTracker,
     unPinTracker,
+    deleteTracker,
+    archiveTracker,
+    hideColumn,
+    deleteColumn,
+    formViewInitialize,
+    addViewToCalendar,
   };
 }
 
 const trackerModule = {
   tracker,
-  handsonOverride,
   handsonModule,
   CustomCheckBoxEditor,
   CustomRadioBoxEditor,
   CustomRichTextBoxEditor,
+  CustomAutoCompleteEditor,
+  Filter,
 };
 
 export default trackerModule;
