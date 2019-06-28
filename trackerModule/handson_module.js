@@ -3,37 +3,28 @@
 import customContextMenu from './custommenu/custom_context_menu';
 import customDropDownMenu from './custommenu/custom_dropdown_menu';
 import utils from '../utils';
+import customPagiNationModule from './pagination/handson_pagination';
+import customSearchModule from './search/handson_search';
 
 const handsonModule = () => {
-	const init = (colHeaders, colInfo, data, projectId, trackerId,trackerContainerRef, isWidget, searchElemRef) => {
+	const init = (colHeaders, colInfo, data, projectId, trackerId, trackerViewId, trackerContainerRef, isWidget, searchElemRef, permissions, isArchiveView) => {
     isWidget = JSON.parse(isWidget);
-    colInfo.map((ele) => {
-      if (ele.type === 'autocomplete') {
-        ele.renderer = 'autocomplete';
-        ele.allowHtml = true;
-        ele.editor = 'ma.AutoCompleteEditor';
-        ele.source = function (query, process) {
-                      jQuery.ajax({
-                        url: '/custom_user_autocomplete',
-                        dataType: 'json',
-                        data: { q: query, },
-                        success: (response) => {
-                          process(response.map(obj => `<span class='hide hot-ma-autocomplete'>${obj.id}:</span><span>${obj.name}</span>`));
-                        },
-                      });
-                  };
-      }
-    });
-    console.info(data);
-		container = document.getElementById(trackerContainerRef);
-    if(!window.HANDSONTABLEINSTANCES) {
+    // Widgets are Read only.
+    if (isWidget && colInfo && Array.isArray(colInfo)) {
+      Handsontable.helper.arrayEach(colInfo, (obj) => { obj.editor = false; });
+    }
+    // Get reference.
+    container = document.getElementById(trackerContainerRef);
+    // Create instancs on single object.
+    if (!window.HANDSONTABLEINSTANCES) {
       window.HANDSONTABLEINSTANCES = {};
     }
+    // Intialize hansontable instance.
     window.HANDSONTABLEINSTANCES[trackerContainerRef] = new Handsontable(container, {
       data,
       colHeaders,
       columns: colInfo,
-      rowHeaders: getRowHeaderValues.bind(null,data),
+      rowHeaders: getRowHeaderValues.bind(null, data),
       filters: true,
       manualColumnResize: false,
       manualRowResize: false,
@@ -41,40 +32,77 @@ const handsonModule = () => {
       currentColClassName: 'currentCol',
       search: true,
       hiddenColumns: true,
+      hiddenRows: {
+        copyPasteEnabled: true,
+        indicators: true,
+      },
       autoWrapRow: true,
+      minRows: 3,
       width: '100%',
-      height: '78vh',
+      stretchH: 'all',
+      height: isWidget ? '280px' : '78vh',
       licenseKey: 'non-commercial-and-evaluation',
-      cells: function (row, column, prop) {
-        const rowData = this.instance.getSourceDataAtRow(row),
-              cellProperties = {};
-        if (Handsontable.helper.isObject(rowData) && rowData.is_locked) cellProperties.readOnly = true;
+      cells: function (row) {
+        // if(isWidget) return; // Return in case it's a widget.
+        const [cellProperties, rowData] = [{}, this.instance.getSourceDataAtRow(row)];
+
+        if (Handsontable.helper.isObject(rowData) && rowData.is_locked) {
+          cellProperties.readOnly = true;
+        } else {
+          if (!permissions.is_team_member) {
+            if (permissions.edit_scope === 'D') {
+              cellProperties.readOnly = true;
+            } else if (permissions.edit_scope === 'M') {
+              if (Handsontable.helper.isObject(rowData) && rowData.user_id !== permissions.user_id) cellProperties.readOnly = true;
+            }
+          }
+        }
+
         return cellProperties;
       },
-      afterChange: (changes) => {
+      afterChange: function (changes) {
         if (changes !== null) {
-          const changedElements = {};
+          const changedElements = { newRec: {}, updatedRec: {}, };
           let datarowId,
-              updatedAt;
+              updatedAt,
+              ele;
 
-          changes.forEach(([row, columnId, , newValue]) => {
-            [datarowId, updatedAt] = (document.getElementsByClassName('htDimmed').filter((ele, index) => index === row)[0]).innerHTML.split(',');
-            if (changedElements[datarowId] === undefined) changedElements[datarowId] = {};
-            changedElements[datarowId]['DT_updated'] = updatedAt;
+          window.selectedRowsData = [];
+
+          changes.forEach(([row, columnId, , newValue], index) => {
+            const rowData = this.getSourceDataAtRow(row);
+            [datarowId, updatedAt] = [rowData.id, rowData.updated_at];
+            window.selectedRowsData.push(rowData);
+
+            if (datarowId === null || datarowId === undefined) {
+              ele = changedElements['newRec'][index];
+            } else {
+              ele = changedElements['updatedRec'][datarowId];
+            }
+
+            if (ele === undefined) ele = {};
+            ele['DT_updated'] = updatedAt;
 
             if (typeof (newValue) !== 'number' && newValue.indexOf('hot-ma-autocomplete') !== -1) {
-              changedElements[datarowId][columnId] = ES6MangoSpring.trackerModule.tracker().extractTextFromHTMLString(newValue);
+              ele[columnId.gsub('data.', '')] = ES6MangoSpring.trackerModule.tracker().extractTextFromHTMLString(newValue);
             } else {
-              changedElements[datarowId][columnId] = newValue;
+              ele[columnId.gsub('data.', '')] = newValue;
+            }
+
+            if (datarowId === null || datarowId === undefined) {
+              changedElements['newRec'][index] = ele;
+            } else {
+              changedElements['updatedRec'][datarowId] = ele;
             }
           });
 
           jQuery.ajax({
             url: '/user/v2/tracker/data/bulk_update',
             type: 'PUT',
-            data: { project_id: projectId, changedElements, tracker_id: trackerId, },
+            data: { project_id: projectId, changedElements, tracker_id: trackerId, tracker_view_id: trackerViewId },
             success: (response) => {
-              utils.log('response', response);
+              window.selectedRowsData.each((rowData) => { rowData.updated_at = response.data[rowData.id]; });
+              window.selectedRowsData = null;
             },
           });
         }
@@ -90,41 +118,30 @@ const handsonModule = () => {
         const activeEditor = this.getActiveEditor();
         // Select the cell that we want to edit.
         this.selectCell(coords.row, coords.col);
-        activeEditor.beginEditing();
+        activeEditor && activeEditor.beginEditing();
       },
     });
     // Hide on widgets.
-    if(!isWidget) {
+    if (!isWidget) {
       // Create Context Menu for handsontable.
       window.HANDSONTABLEINSTANCES[trackerContainerRef].updateSettings({
         contextMenu: {
-          items: customContextMenu().createCustomContextMenu(window.HANDSONTABLEINSTANCES[trackerContainerRef], colHeaders, colInfo),
+          items: customContextMenu().createCustomContextMenu(window.HANDSONTABLEINSTANCES[trackerContainerRef], colHeaders, colInfo, permissions, isArchiveView),
         },
         dropdownMenu: {
-          items: customDropDownMenu().createCustomDropDownMenu(window.HANDSONTABLEINSTANCES[trackerContainerRef], colHeaders, colInfo),
+          items: customDropDownMenu().createCustomDropDownMenu(window.HANDSONTABLEINSTANCES[trackerContainerRef], colHeaders, colInfo, permissions, isArchiveView),
         },
-      });  
-    }
-    bindSearchEvent(searchElemRef, window.HANDSONTABLEINSTANCES[trackerContainerRef]);
-  },
-
-  getRowHeaderValues = function (data,index) {
-    if(data[index].is_locked) {
-      return `<i class="fa fa-lock-alt"> ${index}`;
-    } else {
-      return index;
-    }
-  },
-
-  bindSearchEvent = (searchElemRef, hotInstance) => {
-    const searchElem = utils.grabClassElements(searchElemRef);
-    if (searchElem[0] !== undefined) {
-      Handsontable.dom.addEvent(searchElem[0], 'keyup', function () {
-        const search = hotInstance.getPlugin('search');
-        search.query(this.value);
-        hotInstance.render();
       });
     }
+    customSearchModule(searchElemRef, window.HANDSONTABLEINSTANCES[trackerContainerRef]).bindSearchEvent();
+    // customPagiNationModule(trackerContainerRef,15);
+  },
+
+  getRowHeaderValues = function (data, index) {
+    if (data[index].is_locked) {
+      return `<i class="fa fa-lock-alt"> ${index}`;
+    }
+    return index;
   };
 
 	return {
