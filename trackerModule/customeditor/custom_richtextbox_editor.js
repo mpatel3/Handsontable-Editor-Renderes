@@ -1,5 +1,6 @@
 /* eslint prefer-rest-params: 0 */
 /* eslint no-param-reassign: 0 */
+import commonUtility from '../commonUtility/commonUtility';
 /**
  * @description - Custom editor for Rich text box editor.
  * @param - none.
@@ -18,8 +19,10 @@ const CustomRichTextBoxEditor = () => {
      */
     initFunc = function () {
         // create a node.
+        const elem = document.getElementById('customRichTextBoxEditor');
+        if (elem) elem.remove();
         this.wrapperDiv = this.instance.rootDocument.createElement('div');
-        this.wrapperDiv.setAttribute('id', `customRichTextBoxEditor_${new Date().getTime()}`);
+        this.wrapperDiv.setAttribute('id', 'customRichTextBoxEditor');
         this.wrapperDivStyle = this.wrapperDiv.style;
         this.wrapperDivStyle.position = 'absolute';
         this.wrapperDivStyle.boxShadow = '-1px 2px 5px 3px rgba(224,224,224,1)';
@@ -80,26 +83,45 @@ const CustomRichTextBoxEditor = () => {
      * @param - none.
      */
     openFunc = function () {
-        const [options, offset] = [{
-            toolbar: 'Minimalistic',
-            height: '316px',
-            width: '400px',
-            scayt_maxSuggestions: 3,
-            scayt_autoStartup: false,
-            startupFocus: true,
-        }, this.TD.getBoundingClientRect()];
-        this.wrapperDivStyle.top = `${this.instance.rootWindow.pageYOffset + offset.top + Handsontable.dom.outerHeight(this.TD)}px`;
-        this.wrapperDivStyle.left = `${this.instance.rootWindow.pageXOffset + offset.left}px`;
+        const options = {
+                toolbar: 'Minimalistic',
+                height: '316px',
+                width: '400px',
+                scayt_maxSuggestions: 3,
+                scayt_autoStartup: false,
+                startupFocus: true,
+            },
+            offset = this.TD.getBoundingClientRect(),
+            editorHeight = Number(`${316 + 12}`),
+            cellInstnaceHeight = Handsontable.dom.outerHeight(this.TD),
+            flipNeeded = commonUtility.isFlipNeeded(this.TD, this.instance.view.wt.wtTable.TABLE, this.instance.view.wt.wtTable.THEAD, editorHeight);
+
+        if (flipNeeded) {
+            this.wrapperDivStyle.top = `${this.instance.rootWindow.pageYOffset + offset.top - editorHeight}px`;
+            this.wrapperDivStyle.left = `${this.instance.rootWindow.pageXOffset + offset.left}px`;
+        } else {
+            this.wrapperDivStyle.top = `${this.instance.rootWindow.pageYOffset + offset.top + cellInstnaceHeight}px`;
+            this.wrapperDivStyle.left = `${this.instance.rootWindow.pageXOffset + offset.left}px`;
+        }
         this.wrapperDivStyle.height = 'auto';
         // Intranet.prototype.initEditor(jQuery(this.textarea), 'Minimalistic');
         CKEDITOR.replace(this.textarea.id, options);
         this.wrapperDiv.style.display = '';
     },
     /**
+     * @description - function will call before editor finished editing.
+     */
+    finishEditingFunc = function () {
+        if (event.target.id.indexOf('cke_') > -1) return;
+        Handsontable.editors.BaseEditor.prototype.finishEditing.apply(this, arguments);
+    },
+    /**
      * @description - function will help us to  hide the editor instance.
      * @param - none.
      */
     closeFunc = function () {
+        if (event.target.id.indexOf('cke_') > -1) return;
+        if (CKEDITOR.instances[this.textarea.id]) CKEDITOR.instances[this.textarea.id].destroy(false);
         this.wrapperDiv.style.display = 'none';
     },
     /**
@@ -114,10 +136,9 @@ const CustomRichTextBoxEditor = () => {
      * @param - none.
      */
     customRendererFunc = function (hotInstance, td, row, column, prop, value) {
+        value = value ? commonUtility.decodeHTMLEntities(value) : '';
         Handsontable.renderers.BaseRenderer.apply(this, arguments);
-        const el = document.createElement('div');
-        Handsontable.dom.fastInnerHTML(el, value ? value: '');
-        const tmplateString = `<div><a class="htmlEditExpand right"><i class="fas fa-expand" aria-hidden="true"></i></a><div class="htmlEditContent">${el.innerText}</div></div>`;
+        const tmplateString = `<div><a class="htmlEditExpand right"><i class="fas fa-expand" aria-hidden="true"></i></a><div id='mangoCKeditorContent' class="htmlEditContent">${value}</div></div>`;
         Handsontable.dom.empty(td);
         Handsontable.dom.fastInnerHTML(td, tmplateString);
         td.setAttribute('data-col-id', prop);
@@ -131,6 +152,7 @@ const CustomRichTextBoxEditor = () => {
         richTextBoxCustomEditor.prototype.prepare = prepareFunc;
         richTextBoxCustomEditor.prototype.getValue = getValueFunc;
         richTextBoxCustomEditor.prototype.setValue = setValueFunc;
+        richTextBoxCustomEditor.prototype.finishEditing = finishEditingFunc;
         richTextBoxCustomEditor.prototype.open = openFunc;
         richTextBoxCustomEditor.prototype.close = closeFunc;
         richTextBoxCustomEditor.prototype.focus = focusFunc;
