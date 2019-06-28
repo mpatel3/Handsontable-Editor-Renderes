@@ -1,3 +1,5 @@
+import commonUtility from '../commonUtility/commonUtility';
+
 /* eslint prefer-rest-params: 0 */
 /* eslint no-param-reassign: 0 */
 /**
@@ -22,7 +24,7 @@ const CustomRadioBoxEditor = () => {
         Object.keys(options).forEach((key) => {
             if (Object.prototype.hasOwnProperty.call(options, key)) {
                 const uniqId = `${key}_${(new Date()).getTime()}`;
-                templateString += `<li><input type='radio' name="radioBtn" ${options[key] === currValue ? 'checked' : ''} value='${options[key]}' id='${uniqId}' /><label htmlFor=${uniqId}>${options[key]}</label></li>`;
+                templateString += `<li class='bottom-5'><input type='radio' class='with-gap' name="radioBtn" ${options[key] === currValue ? 'checked' : ''} value='${options[key]}' id='${uniqId}' /><label for='${uniqId}'>${options[key]}</label></li>`;
             }
         });
         return templateString;
@@ -33,12 +35,12 @@ const CustomRadioBoxEditor = () => {
      */
     initFunc = function () {
         // create a node.
+        const elem = document.getElementById('customRadioBoxEditor');
+        if (elem) elem.remove();
         this.ulListElm = this.instance.rootDocument.createElement('UL');
-        this.ulListElm.setAttribute('id', `customRadioBoxEditor_${new Date().getTime()}`);
+        this.ulListElm.setAttribute('id', 'customRadioBoxEditor');
         this.ulListElmStyle = this.ulListElm.style;
         this.ulListElmStyle.position = 'absolute';
-        this.ulListElmStyle.top = 0;
-        this.ulListElmStyle.left = 0;
         this.ulListElmStyle.zIndex = 9999;
         this.ulListElm.style.display = 'none';
         // Attach node to DOM, by appending it to the container holding the table
@@ -85,15 +87,24 @@ const CustomRadioBoxEditor = () => {
      * @param - none.
      */
     openFunc = function () {
-        const [width, offset] = [Handsontable.dom.outerWidth(this.TD), this.TD.getBoundingClientRect()];
-        this.ulListElmStyle.top = `${this.instance.rootWindow.pageYOffset + offset.top + Handsontable.dom.outerHeight(this.TD)}px`;
-        this.ulListElmStyle.left = `${this.instance.rootWindow.pageXOffset + offset.left}px`;
+        const width = Handsontable.dom.outerWidth(this.TD),
+            editorHeight = this.ulListElm.getHeight(),
+            offset = this.TD.getBoundingClientRect(),
+            cellInstnaceHeight = Handsontable.dom.outerHeight(this.TD),
+            flipNeeded = commonUtility.isFlipNeeded(this.TD, this.instance.view.wt.wtTable.TABLE, this.instance.view.wt.wtTable.THEAD, editorHeight);
         // sets select dimensions to match cell size
         this.ulListElmStyle.height = 'auto';
         this.ulListElmStyle.minWidth = `${width}px`;
         this.ulListElmStyle.margin = '0px';
         this.ulListElmStyle.padding = '5px';
         this.ulListElmStyle.backgroundColor = '#fff';
+        if (flipNeeded) {
+            this.ulListElmStyle.top = `${this.instance.rootWindow.pageYOffset + offset.top - editorHeight - 5}px`;
+            this.ulListElmStyle.left = `${this.instance.rootWindow.pageXOffset + offset.left}px`;
+        } else {
+            this.ulListElmStyle.top = `${this.instance.rootWindow.pageYOffset + offset.top + cellInstnaceHeight}px`;
+            this.ulListElmStyle.left = `${this.instance.rootWindow.pageXOffset + offset.left}px`;
+        }
         this.ulListElm.style.display = '';
     },
     /**
